@@ -1,0 +1,515 @@
+import random
+import os
+
+
+def save_game(player, revealed, grid, filename="savegame.txt"):
+    try:
+        with open(filename, "w") as f:
+            f.write(f"{player['hp']}\n")
+            f.write(f"{player['pos'][0]} {player['pos'][1]}\n")
+            f.write(f"{player['has_sword']} {player['has_shield']}\n")
+            f.write(f"{player['kills']}\n")
+            f.write(",".join(player['inventory']) + "\n")
+            rev_list = [f"{x},{y}" for (x, y) in revealed]
+            f.write(" ".join(rev_list) + "\n")
+            for row in grid:
+                f.write("".join(row) + "\n")
+        print("Игра успешно сохранена!")
+    except Exception as e:
+        print(f"Ошибка при сохранении: {e}")
+
+
+def load_game(filename="savegame.txt"):
+    if not os.path.exists(filename):
+        print("Файл сохранения не найден.")
+        return None, None, None
+    try:
+        with open(filename, "r") as f:
+            hp = int(f.readline().strip())
+            pos_x, pos_y = map(int, f.readline().split())
+            has_sword, has_shield = map(lambda x: x == 'True', f.readline().split())
+            kills = int(f.readline().strip())
+            inv_line = f.readline().strip()
+            inventory = inv_line.split(",") if inv_line else []
+            rev_line = f.readline().strip()
+            revealed = set()
+            if rev_line:
+                for pair in rev_line.split():
+                    x, y = map(int, pair.split(","))
+                    revealed.add((x, y))
+            grid = []
+            for _ in range(5):
+                grid.append(list(f.readline().strip()))
+        player = {
+            'hp': hp,
+            'pos': (pos_x, pos_y),
+            'inventory': inventory,
+            'has_sword': has_sword,
+            'has_shield': has_shield,
+            'kills': kills
+        }
+
+        has_key = any('K' in row for row in grid)
+        if not has_key and "Ключ от подъезда" not in player['inventory']:
+            print("Внимание: в сохранении не было ключа. Он был добавлен на карту.")
+            for i in range(5):
+                for j in range(5):
+                    if grid[i][j] == '.' and (i, j) != (0, 0):
+                        grid[i][j] = 'K'
+                        break
+                else:
+                    continue
+                break
+
+        print("Игра успешно загружена!")
+        return player, revealed, grid
+    except Exception as e:
+        print(f"Ошибка при загрузке: {e}")
+        return None, None, None
+
+
+def generate_maze(n, x=0, y=0, grid=None):
+    if grid is None:
+        grid = [['.' for _ in range(n)] for _ in range(n)]
+    if x >= n:
+        return grid
+    if x == 0 and y == 0:
+        grid[x][y] = '.'
+    else:
+        room_type = random.choices(
+            ['.', 'C', 'M', 'T', 'K', 'P'],
+            weights=[40, 15, 15, 15, 5, 10],
+            k=1
+        )[0]
+        grid[x][y] = room_type
+    if y + 1 < n:
+        generate_maze(n, x, y + 1, grid)
+    else:
+        generate_maze(n, x + 1, 0, grid)
+    return grid
+
+
+def ensure_key_exists(grid, n):
+    has_key = any('K' in row for row in grid)
+    if not has_key:
+        empty_cells = []
+        for i in range(n):
+            for j in range(n):
+                if grid[i][j] == '.' and (i, j) != (0, 0):
+                    empty_cells.append((i, j))
+        if empty_cells:
+            kx, ky = random.choice(empty_cells)
+            grid[kx][ky] = 'K'
+            print("(Генератор лабиринта: Ключ от подъезда гарантированно размещен на карте)")
+
+
+def print_maze(grid, player_pos, n, revealed):
+    print("\n   " + " ".join([str(i) for i in range(n)]))
+    for i in range(n):
+        row = []
+        for j in range(n):
+            if (i, j) == player_pos:
+                row.append('@')
+            elif (i, j) in revealed:
+                row.append(grid[i][j] if grid[i][j] != 'V' else ' ')
+            else:
+                row.append('?')
+        print(f"{i}  " + " ".join(row))
+    print()
+
+
+def print_inventory(inv):
+    if not inv:
+        print("Карманы пусты, как лента в TikTok без трендов.")
+        return
+    inv.sort()
+    print("Ваш лут:", ", ".join(inv))
+    print("Количество вещей:", len(inv))
+
+
+def use_item(item, player, grid, n, revealed):
+    if item == "Боярышник для бедных":
+        heal = 20
+        player['hp'] = min(100, player['hp'] + heal)
+        print(
+            f"Вы выпили настойку и восстановили {heal} HP. Теперь у вас {player['hp']} HP. Голова кружится, но жить можно.")
+        return True
+    elif item == "Тапок Возмездия":
+        player['has_sword'] = True
+        print("Вы взяли в руки Тапок Возмездия! Теперь соседские колонки вам не страшны.")
+        return False
+    elif item == "Крышка от кастрюли":
+        player['has_shield'] = True
+        print("Вы вооружились крышкой от кастрюли! Она выдержит один удар об пол.")
+        return False
+    elif item == "Фонарик с 3% зарядом":
+        print("Вы включили фонарик. Он мигнул и погас. Соседние комнаты освещены (наверное)!")
+        x, y = player['pos']
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < n and 0 <= ny < n:
+                    revealed.add((nx, ny))
+        return True
+    elif item == "Скриншот 2ГИС":
+        print("Вы открыли скриншот карты в галерее. Весь лабиринт теперь виден!")
+        for i in range(n):
+            for j in range(n):
+                revealed.add((i, j))
+        return True
+    elif item in ["Пломба на память", "Клочок шерсти из пупка"]:
+        heal = 5
+        player['hp'] = min(100, player['hp'] + heal)
+        print(f"Вы использовали {item} и восстановили {heal} HP. Немного мерзко, но работает.")
+        return True
+    elif item == "Ключ от подъезда":
+        print("Ключ от выхода. Его нельзя использовать здесь — нужно добраться до старта!")
+        return False
+    elif item in ["Песок", "Вода"]:
+        print(f"Вы использовали {item}, но ничего не произошло. (Это просто мусор из моделирования).")
+        return True
+    else:
+        print(f"Вы не знаете, как использовать {item}.")
+        return False
+
+
+def fight_monster(player, grid, n, revealed):
+    monster_hp = random.randint(30, 60)
+    monster_dmg = random.randint(5, 15)
+    print(f"\n=== БОЙ С СОСЕДОМ С КОЛОНКОЙ ===")
+    print(f"Сосед: HP {monster_hp}, Атака {monster_dmg}. Он кричит: 'Слышь, а ты знаешь этот трек?!'")
+    print(f"Ваше HP: {player['hp']}")
+
+    defending = False
+    turn = 0
+
+    while monster_hp > 0 and player['hp'] > 0:
+        turn += 1
+        print(f"\n--- Ход {turn} ---")
+        print(f"Ваше HP: {player['hp']} | HP соседа: {monster_hp}")
+        print("1. Атаковать Тапком")
+        print("2. Прикинуться шлангом (Защищаться)")
+        print("3. Использовать предмет")
+        print("4. Попробовать сбежать")
+
+        choice = input("Ваш выбор (1-4): ")
+
+        if choice == '1':
+            dmg = random.randint(10, 20)
+            monster_hp -= dmg
+            print(f"Вы нанесли {dmg} урона! Сосед сбился с ритма, у него осталось {max(0, monster_hp)} HP.")
+            defending = False
+        elif choice == '2':
+            print("Вы прикинулись шлангом. Сосед в недоумении, следующий удар будет слабее.")
+            defending = True
+        elif choice == '3':
+            if not player['inventory']:
+                print("Карманы пусты!")
+                continue
+            print("Предметы:", player['inventory'])
+            item = input("Что использовать? ")
+            if item in player['inventory']:
+                consumed = use_item(item, player, grid, n, revealed)
+                if consumed:
+                    player['inventory'].remove(item)
+                defending = False
+            else:
+                print("Такого предмета нет.")
+                continue
+        elif choice == '4':
+            if random.random() < 0.5:
+                print("Вы успешно сбежали от соседа! Главное — не попасть в его сторис.")
+                return True
+            else:
+                print("Сбежать не удалось! Сосед включил камеру и начал снимать вас.")
+                defending = False
+        else:
+            print("Неверный ввод.")
+            continue
+
+        if monster_hp > 0:
+            if defending:
+                dmg = max(1, monster_dmg // 2)
+                print(f"Сосед атакует, но вы блокировали часть урона: {dmg}.")
+            else:
+                dmg = monster_dmg + random.randint(-3, 3)
+                dmg = max(1, dmg)
+                print(f"Сосед атакует и наносит {dmg} урона басами из колонки!")
+
+            player['hp'] -= dmg
+            defending = False
+
+            if player['hp'] <= 0:
+                print("Вы погибли в бою... Сосед сказал: 'Это был пранк, брат'.")
+                return False
+
+    if monster_hp <= 0:
+        print("\nВы победили Соседа с колонкой! Наконец-то тишина.")
+        player['kills'] += 1
+        if random.random() < 0.6:
+            loot = random.choice(["Пломба на память", "Клочок шерсти из пупка", "Боярышник для бедных"])
+            player['inventory'].append(loot)
+            print(f"Вы нашли лут: {loot} (автоматически добавлено в карман)")
+        return True
+    return False
+
+
+def interact_room(room, player, grid, n, revealed):
+    if room == 'V' or room == '.':
+        print("Пустая комната. Тут даже мыши повесились.")
+        if random.random() < 0.4:
+            event = random.choice([
+                "Вы нашли записку: 'Ключ где-то здесь. Ищите лучше'.",
+                "В углу стоит сломанный телевизор. Он показывает только рекламу.",
+                "На стене висит объявление: 'Ремонт с 9 до 18'. Подпись: 'Мечтать не вредно'.",
+                "Вы наступили на мокрый пол. Кажется, тут недавно мыли посуду."
+            ])
+            print(event)
+        return True
+
+    if room == 'C':
+        print("Вы нашли коробку из-под доставки!")
+        item = random.choice(
+            ["Тапок Возмездия", "Боярышник для бедных", "Крышка от кастрюли", "Фонарик с 3% зарядом", "Скриншот 2ГИС"])
+        player['inventory'].append(item)
+        print(f"Внутри коробки: {item} (автоматически добавлено в карман)")
+
+        if item == "Крышка от кастрюли":
+            player['has_shield'] = True
+            print("Крышка автоматически надета! Она защитит от следующей ловушки.")
+        elif item == "Тапок Возмездия":
+            player['has_sword'] = True
+            print("Тапок автоматически взят в руки!")
+
+        return True
+
+    if room == 'M':
+        print("На вас напал Сосед с колонкой!")
+        if "Тапок Возмездия" in player['inventory'] or player.get('has_sword'):
+            print("У вас есть Тапок Возмездия! Вы можете дать отпор.")
+            action = input("Сразиться? (да/нет): ").lower()
+            if action == 'да':
+                return fight_monster(player, grid, n, revealed)
+            else:
+                dmg = random.randint(10, 30)
+                player['hp'] -= dmg
+                print(f"Вы попытались убежать, но сосед ударил вас на {dmg} урона. Осталось HP: {player['hp']}")
+                return player['hp'] > 0
+        else:
+            dmg = random.randint(10, 30)
+            player['hp'] -= dmg
+            print(f"У вас нет тапка! Сосед наносит вам {dmg} урона. Осталось HP: {player['hp']}")
+            if player['hp'] <= 0:
+                print("Вы погибли...")
+                return False
+            return True
+
+    if room == 'T':
+        print("Вы наступили на Оставленное на полу Лего!")
+        if player.get('has_shield'):
+            print("Ваша Крышка от кастрюли поглотила весь урон и треснула! Вы спасли свою пятку.")
+            player['has_shield'] = False
+            if "Крышка от кастрюли" in player['inventory']:
+                player['inventory'].remove("Крышка от кастрюли")
+        else:
+            base_damage = random.randint(5, 15)
+            player['hp'] -= base_damage
+            print(f"Вы потеряли {base_damage} HP. Осталось: {player['hp']}. Больно было всем.")
+            if player['hp'] <= 0:
+                print("Вы погибли...")
+                return False
+        return True
+
+    if room == 'K':
+        print("Вы нашли Ключ от подъезда!")
+        player['inventory'].append("Ключ от подъезда")
+        print("Ключ автоматически добавлен в карман.")
+        return True
+
+    if room == 'P':
+        print("Вы нашли Заброшенный лифт!")
+        action = input("Активировать лифт? (да/нет): ").lower()
+        if action == 'да':
+            new_x = random.randint(0, n - 1)
+            new_y = random.randint(0, n - 1)
+            player['pos'] = (new_x, new_y)
+            revealed.add((new_x, new_y))
+            print(f"Лифт скрипнул, дернулся и перенёс вас в комнату ({new_x}, {new_y}).")
+        return True
+    return True
+
+
+def inventory_actions(player, grid, n, revealed):
+    while True:
+        print("\n--- ДЕЙСТВИЯ С КАРМАНАМИ ---")
+        print("1. Посмотреть карманы")
+        print("2. Выбросить предмет")
+        print("3. Поискать предмет")
+        print("4. Использовать предмет")
+        print("5. Выйти из меню")
+        choice = input("Выбор (1-5): ")
+
+        if choice == '1':
+            print_inventory(player['inventory'])
+        elif choice == '2':
+            if not player['inventory']:
+                print("Карманы пусты.")
+                continue
+            print("Предметы:", player['inventory'])
+            item = input("Какой предмет выбросить? ")
+            if item in player['inventory']:
+                player['inventory'].remove(item)
+                if item == "Крышка от кастрюли":
+                    player['has_shield'] = False
+                if item == "Тапок Возмездия":
+                    player['has_sword'] = False
+                print(f"{item} выброшен.")
+            else:
+                print("Такого предмета нет.")
+        elif choice == '3':
+            item = input("Какой предмет ищем? ")
+            if item in player['inventory']:
+                idx = player['inventory'].index(item)
+                print(f"Предмет найден на позиции {idx}.")
+            else:
+                print("Предмет не найден.")
+        elif choice == '4':
+            if not player['inventory']:
+                print("Карманы пусты.")
+                continue
+            print("Предметы:", player['inventory'])
+            item = input("Какой предмет использовать? ")
+            if item in player['inventory']:
+                consumed = use_item(item, player, grid, n, revealed)
+                if consumed:
+                    player['inventory'].remove(item)
+                    print(f"{item} был использован и исчез.")
+                else:
+                    print(f"{item} остался в карманах.")
+            else:
+                print("Такого предмета нет.")
+        elif choice == '5':
+            break
+        else:
+            print("Неверный ввод.")
+
+
+def main():
+    print("=" * 50)
+    print("   ДОБРО ПОЖАЛОВАТЬ В ЛАБИРИНТ РУИН (ЖК 'СОЛНЕЧНЫЙ')")
+    print("=" * 50)
+    print("Сюжет:")
+    print("Вы — курьер сервиса 'Быстро-Доставка'. Вы взяли заказ на 15 этаж.")
+    print("Но лифт застрял между этажами. Вы вышли на странный этаж, где нет табличек,")
+    print("а за каждой дверью — либо Сосед с колонкой, либо проклятое Лего.")
+    print("Чтобы выбраться, найдите Ключ от подъезда и вернитесь к выходу (0,0).")
+    print("Удачи. Она вам понадобится.")
+    print("=" * 50)
+
+    if os.path.exists("savegame.txt"):
+        ans = input("Найдено сохранение. Загрузить его? (да/нет): ").lower()
+        if ans == 'да':
+            player, revealed, grid = load_game()
+            if player is None:
+                return
+            n = 5
+            print_maze(grid, player['pos'], n, revealed)
+        else:
+            ans2 = input("Начать новую игру? (да/нет): ").lower()
+            if ans2 != 'да':
+                return
+            player = None
+    else:
+        player = None
+
+    if player is None:
+        print("\nВы очнулись в центре лабиринта.")
+        print("Символы: @ - вы, ? - неизвестная комната.")
+        print("Используйте WASD для перемещения (w - вверх, a - влево, s - вниз, d - вправо).")
+        print("Введите 'i' для карманов, 'q' для выхода, 'save' для сохранения.")
+
+        n = 5
+        grid = generate_maze(n)
+        ensure_key_exists(grid, n)
+
+        player = {
+            'hp': 100,
+            'inventory': [],
+            'pos': (0, 0),
+            'has_sword': False,
+            'has_shield': False,
+            'kills': 0
+        }
+
+        grid[0][0] = 'V'
+        revealed = {(0, 0)}
+
+        print_maze(grid, player['pos'], n, revealed)
+
+    while True:
+        if player['hp'] <= 0:
+            print("Игра окончена. Вы погибли. Курьерская служба скорбит.")
+            break
+
+        print(f"\nHP: {player['hp']} | Позиция: {player['pos']} | Побеждено соседей: {player['kills']}")
+        cmd = input("Действие (w/a/s/d, i - карманы, save, q - выход): ").lower()
+
+        if cmd == 'q':
+            print("Вы вышли из игры. Заказ так и не был доставлен.")
+            break
+
+        if cmd == 'save':
+            save_game(player, revealed, grid)
+            continue
+
+        if cmd == 'i':
+            inventory_actions(player, grid, n, revealed)
+            print_maze(grid, player['pos'], n, revealed)
+            continue
+
+        x, y = player['pos']
+        new_x, new_y = x, y
+
+        if cmd == 'w':
+            new_x -= 1
+        elif cmd == 's':
+            new_x += 1
+        elif cmd == 'a':
+            new_y -= 1
+        elif cmd == 'd':
+            new_y += 1
+        else:
+            print("Неизвестная команда.")
+            continue
+
+        if not (0 <= new_x < n and 0 <= new_y < n):
+            print("Вы не можете выйти за пределы лабиринта.")
+            continue
+
+        player['pos'] = (new_x, new_y)
+        room = grid[new_x][new_y]
+        revealed.add((new_x, new_y))
+
+        if room not in ['V', '.']:
+            print(f"\nВы вошли в комнату ({new_x}, {new_y}).")
+            alive = interact_room(room, player, grid, n, revealed)
+            if not alive:
+                break
+            grid[new_x][new_y] = 'V'
+        else:
+            print("Пустая комната.")
+
+        if player['pos'] == (0, 0) and "Ключ от подъезда" in player['inventory']:
+            print("\n=== ВЫ НАШЛИ ВЫХОД! ===")
+            print("С ключом в руках вы открываете дверь подъезда.")
+            print("На улице вас ждет злой клиент с холодной пиццей...")
+            print("Но вы живы, а это главное. Победа!")
+            break
+
+        print_maze(grid, player['pos'], n, revealed)
+
+    print("\nСпасибо за игру!")
+
+
+if __name__ == "__main__":
+    main()
