@@ -1,0 +1,26 @@
+def calc():
+    a = int(input("Введите число: "))
+    b = str(input("Введите знак: "))
+    c = int(input("Введите число: "))
+    if b=='+':
+        print(a+c)
+    elif b == '-':
+        print(a-c)
+    elif b == '/':
+        print(a/c)
+    elif b == '*':
+        print(a*c)
+    elif b == '//':
+        print(a//c)
+    elif b == '%':
+        print(a%c)
+    elif b == '**':
+        print(a**c)
+    else:
+        print('я такого не знаю')
+    s = str(input('Продолжить? '))
+    if s == 'да':
+        calc()
+    else:
+        print('ну и не очень то и хотелось')
+calc()
