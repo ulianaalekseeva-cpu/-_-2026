@@ -4,7 +4,6 @@ from datetime import datetime
 import time
 import math
 
-# ---------- Палитра ----------
 BG_DARK      = "#1A1A1A"
 BG_CARD      = "#2A2A2A"
 BG_CARD_ALT  = "#333333"
@@ -16,7 +15,6 @@ TEXT_GRAY    = "#9E9E9E"
 GREEN        = "#4CAF50"
 RED          = "#F44336"
 
-# ---------- Шрифты (с fallback) ----------
 def _pick_font():
     available = set(tkfont.families())
     for name in ("Segoe UI", "Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"):
@@ -24,8 +22,7 @@ def _pick_font():
             return name
     return "TkDefaultFont"
 
-_APP_FONT = None  # инициализируется после создания root
-
+_APP_FONT = None
 def _init_fonts():
     global _APP_FONT, FONT_MAIN, FONT_BOLD, FONT_TITLE, FONT_BALANCE, FONT_SMALL, FONT_INPUT
     _APP_FONT = _pick_font()
@@ -36,13 +33,9 @@ def _init_fonts():
     FONT_SMALL   = (_APP_FONT, 9)
     FONT_INPUT   = (_APP_FONT, 12)
 
-# Заглушки до инициализации (чтобы модуль импортировался без ошибок)
+
 FONT_MAIN = FONT_BOLD = FONT_TITLE = FONT_BALANCE = FONT_SMALL = FONT_INPUT = ("TkDefaultFont", 11)
 
-
-# =============================================================
-#  БЭКЕНД АВТОРИЗАЦИИ
-# =============================================================
 class Auth:
     MAX_ATTEMPTS = 3
     LOCK_SECONDS = 30
@@ -121,9 +114,7 @@ class Auth:
             self.users[self.current_user["phone"]]["balance"] = balance
 
 
-# =============================================================
-#  ЭКРАН ВХОДА
-# =============================================================
+
 class LoginScreen(tk.Frame):
     def __init__(self, master, auth: Auth, on_success):
         super().__init__(master, bg=BG_DARK)
@@ -221,9 +212,6 @@ class LoginScreen(tk.Frame):
         self.on_success(self.auth.current_user)
 
 
-# =============================================================
-#  ГЛАВНОЕ ПРИЛОЖЕНИЕ
-# =============================================================
 class MainApp(tk.Frame):
     def __init__(self, master, auth: Auth, on_logout):
         super().__init__(master, bg=BG_DARK)
@@ -251,7 +239,6 @@ class MainApp(tk.Frame):
 
     # ---------- служебное ----------
     def _clear(self):
-        # отвязываем глобальные бинды колеса, если были
         try:
             self.unbind_all("<MouseWheel>")
         except tk.TclError:
@@ -268,7 +255,6 @@ class MainApp(tk.Frame):
     def _sync_balance(self):
         self.auth.save_balance(self.balance)
 
-    # ========== Главная ==========
     def _show_main(self):
         self._clear()
         self._build_header()
@@ -359,14 +345,12 @@ class MainApp(tk.Frame):
         tk.Label(top, text="МИР", font=FONT_SMALL,
                  fg=TEXT_GRAY, bg=card["color"]).pack(side="right")
 
-        # баланс карты = общий баланс для Black, фиксированный для Credit
         card_balance = self.balance if card["name"] == "Black" else 45_000.00
         tk.Label(frame, text=card["number"], font=(_APP_FONT, 14, "bold"),
                  fg=TEXT_WHITE, bg=card["color"]).pack(anchor="w", pady=(10, 0))
         tk.Label(frame, text=self._fmt(card_balance), font=FONT_MAIN,
                  fg=TEXT_WHITE, bg=card["color"]).pack(anchor="w", pady=(2, 0))
 
-        # рекурсивный биндинг клика
         def bind_rec(w):
             w.bind("<Button-1>", lambda e, c=card: self._show_card_details(c))
             for child in w.winfo_children():
@@ -437,7 +421,6 @@ class MainApp(tk.Frame):
                 bind_rec(child)
         bind_rec(row)
 
-    # ========== Платежи ==========
     def _show_payments(self):
         self._clear()
         self._sub_header("Платежи")
@@ -469,7 +452,7 @@ class MainApp(tk.Frame):
                     bind_rec(child)
             bind_rec(card)
 
-    # ========== Инвестиции ==========
+
     def _show_invest(self):
         self._clear()
         self._sub_header("Инвестиции")
@@ -507,7 +490,7 @@ class MainApp(tk.Frame):
                   activebackground=YELLOW_DARK,
                   command=self._dialog_broker_topup).pack(fill="x", pady=(16, 0))
 
-    # ========== Детали карты ==========
+
     def _show_card_details(self, card):
         self._clear()
         self._sub_header(f"Карта {card['name']}")
@@ -551,7 +534,6 @@ class MainApp(tk.Frame):
             f"БИК: 044525974 (Т-Банк)"
         )
 
-    # ========== Профиль ==========
     def _show_profile(self):
         self._clear()
         self._sub_header("Профиль")
@@ -605,7 +587,6 @@ class MainApp(tk.Frame):
         if messagebox.askyesno("Выход", "Вы уверены, что хотите выйти?"):
             self.on_logout()
 
-    # ========== История ==========
     def _show_all_operations(self):
         self._clear()
         self._sub_header("Все операции")
@@ -622,7 +603,6 @@ class MainApp(tk.Frame):
             f"Статус: Выполнено"
         )
 
-    # ========== Модалки ==========
     def _modal(self, title, build_fn, height=280):
         win = tk.Toplevel(self)
         win.title(title)
@@ -819,7 +799,6 @@ class MainApp(tk.Frame):
             self._dialog_buttons(win, confirm)
         self._modal("Брокерский счёт", build)
 
-    # ========== Вспомогательное ==========
     def _sub_header(self, title):
         head = tk.Frame(self.container, bg=BG_DARK, pady=14, padx=20)
         head.pack(fill="x")
@@ -848,9 +827,7 @@ class MainApp(tk.Frame):
         return f"{value:,.2f} ₽".replace(",", " ")
 
 
-# =============================================================
-#  КОРНЕВОЙ КОНТЕЙНЕР
-# =============================================================
+
 class BankApp(tk.Tk):
     def __init__(self):
         super().__init__()
